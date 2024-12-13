@@ -1,7 +1,5 @@
 <?php
 
-// app/Models/Reseller.php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,19 +10,23 @@ class Reseller extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name',
-        'birthdate',
-        'gender',
-        'phone',
-        'address',
-        'profile_photo', // Only profile photo remains
-        'latitude',
-        'longitude',
-        'user_id',
+        'name', 'birthdate', 'gender', 'phone', 'address', 'latitude', 'longitude', 'profile_photo', 'user_sales_id', 'status'
     ];
 
-    public function user()
+    // Optionally add status scope for easy filtering
+    public function scopeVerified($query)
     {
-        return $this->belongsTo(User::class);
+        return $query->where('status', 'verified');
+    }
+
+    public function scopeUnverified($query)
+    {
+        return $query->where('status', 'unverified');
+    }
+
+    // Define the relationship to the UserSales model
+    public function sales()
+    {
+        return $this->belongsTo(UserSales::class, 'user_sales_id');
     }
 }

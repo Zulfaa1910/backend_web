@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
-class AuthController extends Controller
+class Authcontroller extends Controller
 {
     public function register(Request $request)
     {

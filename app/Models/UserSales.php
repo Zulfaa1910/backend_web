@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -8,7 +9,8 @@ class UserSales extends Model
 {
     use HasFactory;
 
-    protected $table = 'users_sales'; // Nama tabel di database
+    protected $table = 'user_sales'; // Correct table name (it was 'users_sales', now 'user_sales')
+    
     protected $fillable = [
         'kode_sales',
         'name',
@@ -16,9 +18,11 @@ class UserSales extends Model
         'password',
         'merk_hp',
         'address',
-        'phone_number',
-        'tanggal_lahir',
-        'gender',
-        'status',
+        'phone',  // Updated field name
+        'birthdate', // Updated field name
+        'gender',    // Updated field name
+        'kode_unik',
+        'phone_verified_at',
+        'verification_code', // Added verification code field
     ];
 }

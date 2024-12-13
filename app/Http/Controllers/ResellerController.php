@@ -1,130 +1,120 @@
 <?php
 
-// app/Http/Controllers/ResellerController.php
-
 namespace App\Http\Controllers;
 
 use App\Models\Reseller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class ResellerController extends Controller
 {
-    // Menambahkan reseller
-    public function store(Request $req)
+    public function index()
     {
-        // Validasi input
-        $rules = [
-            'name' => 'required|string',
+        $resellers = Reseller::all();
+        return response()->json($resellers);
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name' => 'required',
             'birthdate' => 'required|date',
             'gender' => 'required|in:male,female,other',
-            'phone' => 'required|string|unique:resellers',
-            'address' => 'required|string',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'profile_photo' => 'nullable|string', // Foto profil
-        ];
-
-        $validator = Validator::make($req->all(), $rules);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
-        }
-
-        // Ambil user yang sedang login
-        $user = auth()->user();
-
-        // Simpan reseller baru
-        $reseller = Reseller::create([
-            'name' => $req->name,
-            'birthdate' => $req->birthdate,
-            'gender' => $req->gender,
-            'phone' => $req->phone,
-            'address' => $req->address,
-            'latitude' => $req->latitude,
-            'longitude' => $req->longitude,
-            'profile_photo' => $req->profile_photo, // Simpan foto profil
-            'user_id' => $user->id,
+            'phone' => 'required|unique:resellers,phone',
+            'address' => 'required',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'profile_photo' => 'nullable|string', 
+            'user_sales_id' => 'required|exists:user_sales,id',
         ]);
 
+        $lastReseller = Reseller::orderBy('id', 'desc')->first();
+        $nextNumber = $lastReseller ? ((int)substr($lastReseller->kode_reseller, 2)) + 1 : 1;
+        $kode_reseller = 'RS' . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
+
+        $resellerData = $request->all();
+        $resellerData['kode_reseller'] = $kode_reseller;
+        $resellerData['status'] = 'unverified'; // Default to unverified
+
+        $reseller = Reseller::create($resellerData);
+
         return response()->json([
-            'message' => 'Reseller berhasil ditambahkan',
-            'reseller' => $reseller
+            'message' => 'Reseller successfully created. Please verify to activate.',
+            'reseller' => $reseller,
         ], 201);
     }
 
-    // Menampilkan semua reseller milik user yang login
-    public function index()
-    {
-        $user = auth()->user();
-        $resellers = $user->resellers;
-
-        return response()->json($resellers, 200);
-    }
-
-    // Menampilkan reseller berdasarkan ID
     public function show($id)
     {
-        $user = auth()->user();
-        $reseller = Reseller::where('id', $id)->where('user_id', $user->id)->first();
+        $reseller = Reseller::findOrFail($id);
 
-        if (!$reseller) {
-            return response()->json(['message' => 'Reseller tidak ditemukan atau tidak dimiliki oleh user ini'], 404);
+        if ($reseller->status === 'unverified') {
+            return response()->json([
+                'message' => 'Reseller is not verified and cannot be used.',
+            ], 403); // Forbidden status
         }
 
-        return response()->json($reseller, 200);
+        return response()->json($reseller);
     }
 
-    // Mengupdate reseller
-    public function update(Request $req, $id)
+    public function update(Request $request, $id)
     {
-        $user = auth()->user();
-        $reseller = Reseller::where('id', $id)->where('user_id', $user->id)->first();
+        $reseller = Reseller::findOrFail($id);
 
-        if (!$reseller) {
-            return response()->json(['message' => 'Reseller tidak ditemukan atau tidak dimiliki oleh user ini'], 404);
-        }
+        $request->validate([
+            'name' => 'required',
+            'birthdate' => 'required|date',
+            'gender' => 'required|in:male,female,other',
+            'phone' => 'required|unique:resellers,phone,' . $reseller->id,
+            'address' => 'required',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'profile_photo' => 'nullable|string', 
+            'user_sales_id' => 'required|exists:user_sales,id',
+            'status' => 'required|in:verified,unverified', // Ensure valid status
+        ]);
 
-        // Validasi input untuk update
-        $rules = [
-            'name' => 'sometimes|required|string',
-            'birthdate' => 'sometimes|required|date',
-            'gender' => 'sometimes|required|in:male,female,other',
-            'phone' => 'sometimes|required|string|unique:resellers,phone,' . $reseller->id,
-            'address' => 'sometimes|required|string',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'profile_photo' => 'nullable|string', // Aturan untuk foto profil
-        ];
-
-        $validator = Validator::make($req->all(), $rules);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
-        }
-
-        $reseller->update($req->only([
-            'name', 'birthdate', 'gender', 'phone', 'address', 'latitude', 'longitude', 'profile_photo'
-        ]));
+        $reseller->update($request->all());
 
         return response()->json([
-            'message' => 'Reseller berhasil diperbarui',
-            'reseller' => $reseller
+            'message' => 'Reseller successfully updated.',
+            'reseller' => $reseller,
         ], 200);
     }
 
-    // Menghapus reseller
     public function destroy($id)
     {
-        $user = auth()->user();
-        $reseller = Reseller::where('id', $id)->where('user_id', $user->id)->first();
-
-        if (!$reseller) {
-            return response()->json(['message' => 'Reseller tidak ditemukan atau tidak dimiliki oleh user ini'], 404);
-        }
-
+        $reseller = Reseller::findOrFail($id);
         $reseller->delete();
 
-        return response()->json(['message' => 'Reseller berhasil dihapus'], 200);
+        return response()->json([
+            'message' => 'Reseller successfully deleted.',
+        ], 200);
+    }
+
+    public function filterByStatus($status)
+    {
+        $resellers = Reseller::where('status', $status)->get();
+        return response()->json($resellers);
+    }
+
+    // Method to update status
+    public function updateStatus(Request $request, $id)
+    {
+        // Validate the status input
+        $request->validate([
+            'status' => 'required|in:verified,unverified',
+        ]);
+
+        // Find the reseller by ID
+        $reseller = Reseller::findOrFail($id);
+
+        // Update the status
+        $reseller->status = $request->status;
+        $reseller->save();
+
+        return response()->json([
+            'message' => 'Reseller status successfully updated.',
+            'reseller' => $reseller,
+        ], 200);
     }
 }

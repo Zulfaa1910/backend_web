@@ -6,65 +6,60 @@ use Illuminate\Http\Request;
 use App\Models\UserSales;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str; // Import Str class
+use Illuminate\Support\Str;
 
 class UserSalesController extends Controller
 {
+    // Get all user sales
     public function index()
     {
         return response()->json(UserSales::all(), 200); // Return all users with a 200 OK response
     }
 
-    // Register pengguna baru
+    // Register a new user
     public function create(Request $request)
     {
-        // Validasi input
-       // Validasi input
+        // Validate input
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users_sales',
+            'email' => 'required|string|email|max:255|unique:user_sales',
             'password' => 'required|string|min:8',
             'merk_hp' => 'required|string',
             'address' => 'required|string',
-            'phone_number' => 'required|string',
-            'tanggal_lahir' => 'required|date', // validasi untuk tanggal lahir
-            'gender' => 'required|in:L,P', // validasi untuk gender (L = Laki-laki, P = Perempuan)
-            'status' => 'sometimes|in:0,1'
+            'phone' => 'required|string|unique:user_sales', // Ensure phone is unique
+            'birthdate' => 'required|date',
+            'gender' => 'required|in:male,female,other', // Ensure gender is one of the valid values
         ]);
-
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
 
-        // Buat pengguna baru di tabel users_sales
-        // Buat pengguna baru di tabel users_sales
+        // Create a new user in the user_sales table
         $user = UserSales::create([
-            'kode_sales' => $this->generateKodeSales(),  // Kode sales otomatis
-            'kode_unik' => $this->generateKodeUnik(),    // Kode unik otomatis
+            'kode_sales' => $this->generateKodeSales(),
+            'kode_unik' => $this->generateKodeUnik(),
             'merk_hp' => $request->merk_hp,
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'address' => $request->address,
-            'phone_number' => $request->phone_number,
-            'tanggal_lahir' => $request->tanggal_lahir, // Menyimpan tanggal lahir
-            'gender' => $request->gender,               // Menyimpan gender
-            'status' => $request->status ?? 0, // Status default tidak aktif (0)
+            'phone' => $request->phone,
+            'birthdate' => $request->birthdate,
+            'gender' => $request->gender, // Accept 'male', 'female', or 'other'  // Default inactive status
+            'verification_code' => Str::random(6),
         ]);
 
-
-        // Return response
         return response()->json([
             'message' => 'User registered successfully!',
             'user' => $user,
         ], 201);
     }
 
-    // Login pengguna
+    // Login user
     public function login(Request $request)
     {
-        // Validasi input
+        // Validate input
         $validator = Validator::make($request->all(), [
             'email' => 'required|string|email',
             'password' => 'required|string',
@@ -74,17 +69,22 @@ class UserSalesController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        // Cek apakah email dan password cocok
+        // Check if email and password match
         $user = UserSales::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        // Buat token untuk user (gunakan passport atau sanctum)
+        // Skip phone verification status check
+        // if (!$user->phone_verified_at) {
+        //     return response()->json(['message' => 'Phone number not verified.'], 403);
+        // }
+
+        // Create token for the user
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // Return token dan user info
+        // Return token and user info
         return response()->json([
             'message' => 'Login successful!',
             'token' => $token,
@@ -92,7 +92,7 @@ class UserSalesController extends Controller
         ], 200);
     }
 
-    // Read pengguna berdasarkan ID
+    // Get user by ID
     public function show($id)
     {
         $user = UserSales::find($id);
@@ -104,7 +104,7 @@ class UserSalesController extends Controller
         return response()->json($user, 200);
     }
 
-    // Update pengguna berdasarkan ID
+    // Update user by ID
     public function update(Request $request, $id)
     {
         $user = UserSales::find($id);
@@ -113,15 +113,16 @@ class UserSalesController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        // Validasi input
+        // Validate input
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|string|email|max:255|unique:users_sales,email,' . $id,
+            'email' => 'sometimes|required|string|email|max:255|unique:user_sales,email,' . $id,
             'password' => 'sometimes|required|string|min:8',
             'merk_hp' => 'sometimes|required|string',
             'address' => 'sometimes|required|string',
-            'phone_number' => 'sometimes|required|string',
-            'status' => 'sometimes|in:0,1' // Validasi status hanya 0 atau 1
+            'phone' => 'sometimes|required|string|unique:user_sales,phone,' . $id, // Ensure phone is unique
+            'status' => 'sometimes|in:0,1',
+            'gender' => 'sometimes|in:male,female,other', // Gender validation
         ]);
 
         if ($validator->fails()) {
@@ -134,8 +135,9 @@ class UserSalesController extends Controller
         if ($request->has('password')) $user->password = Hash::make($request->password);
         if ($request->has('merk_hp')) $user->merk_hp = $request->merk_hp;
         if ($request->has('address')) $user->address = $request->address;
-        if ($request->has('phone_number')) $user->phone_number = $request->phone_number;
-        if ($request->has('status')) $user->status = $request->status; // Update status (0 atau 1)
+        if ($request->has('phone')) $user->phone = $request->phone;
+        if ($request->has('status')) $user->status = $request->status;
+        if ($request->has('gender')) $user->gender = $request->gender; // Update gender if provided
 
         $user->save();
 
@@ -145,7 +147,7 @@ class UserSalesController extends Controller
         ], 200);
     }
 
-    // Delete pengguna berdasarkan ID
+    // Delete user by ID
     public function destroy($id)
     {
         $user = UserSales::find($id);
@@ -159,32 +161,32 @@ class UserSalesController extends Controller
         return response()->json(['message' => 'User deleted successfully!'], 200);
     }
 
-    // Fungsi tambahan untuk generate kode sales otomatis
+    // Generate automatic sales code
     private function generateKodeSales()
     {
-        // Mendapatkan kode sales terakhir yang ada di database
+        // Get the last sales code in the database
         $lastUser = UserSales::orderBy('kode_sales', 'desc')->first();
 
-        // Jika tidak ada pengguna, mulai dari SL000001
+        // If no users, start from SL000001
         if (!$lastUser) {
             return 'SL000001';
         }
 
-        // Memisahkan prefix 'SL' dan angka
+        // Extract the number from the last sales code
         $lastKodeSales = $lastUser->kode_sales;
-        $lastNumber = intval(substr($lastKodeSales, 2)); // Ambil angka setelah 'SL'
+        $lastNumber = intval(substr($lastKodeSales, 2)); // Get number part after 'SL'
 
-        // Increment angkanya
+        // Increment the number
         $newNumber = $lastNumber + 1;
 
-        // Membuat kode sales baru dengan leading zeros (contoh: SL000001)
+        // Generate the new sales code with leading zeros (example: SL000001)
         return 'SL' . str_pad($newNumber, 6, '0', STR_PAD_LEFT);
     }
 
-    // Fungsi tambahan untuk generate kode unik otomatis
+    // Generate unique code for user
     private function generateKodeUnik()
     {
-        // Menggabungkan timestamp dan 4 karakter acak untuk kode unik
-        return 'SL' . time() . Str::random(4); // Hasil: KU1695833450ABCD
+        // Combine timestamp with 4 random characters to generate a unique code
+        return 'SL' . time() . Str::random(4); // Example: SL1695833450ABCD
     }
 }
